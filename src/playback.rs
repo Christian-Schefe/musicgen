@@ -1,3 +1,7 @@
+pub mod instrument;
+pub mod song;
+pub mod tone;
+
 use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};

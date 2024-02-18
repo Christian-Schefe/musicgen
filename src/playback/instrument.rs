@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use fundsp::hacker::*;
 
-use crate::note::Note;
+use super::tone::Tone;
 
+#[derive(Clone)]
 pub struct InstrumentData {
     pub asdr: (f64, f64, f64, f64),
     pub pan: f64,
@@ -14,11 +15,11 @@ pub struct Instrument {
     sequencer: Sequencer64,
     timer: Shared<f64>,
     data: InstrumentData,
-    sound: Box<dyn Fn() -> Net64>,
+    sound: Box<dyn Fn(InstrumentData) -> Net64>,
 }
 
 impl Instrument {
-    pub fn new(sound: Box<dyn Fn() -> Net64>, outputs: usize, data: InstrumentData) -> Self {
+    pub fn new(sound: Box<dyn Fn(InstrumentData) -> Net64>, outputs: usize, data: InstrumentData) -> Self {
         Self {
             sequencer: Sequencer64::new(true, outputs),
             timer: shared(0.0),
@@ -27,7 +28,7 @@ impl Instrument {
         }
     }
 
-    pub fn sequence_notes(mut self, notes: &[Note]) -> (Net64, Duration) {
+    pub fn sequence_notes(mut self, notes: &[Tone]) -> (Net64, Duration) {
         let mut end_time = 0.0;
 
         for note in notes.iter() {
@@ -54,7 +55,7 @@ impl Instrument {
         )
     }
 
-    fn build_sound(&mut self, note: Note) -> Box<dyn AudioUnit64> {
+    fn build_sound(&mut self, note: Tone) -> Box<dyn AudioUnit64> {
         Box::new(
             ((constant(note.pitch)
                 | var_fn(&self.timer, move |time| {
@@ -65,17 +66,7 @@ impl Instrument {
     }
 
     fn get_sound(&mut self) -> Net64 {
-        (self.sound)()
-    }
-}
-
-impl Clone for InstrumentData {
-    fn clone(&self) -> Self {
-        Self {
-            asdr: self.asdr.clone(),
-            pan: self.pan,
-            volume: self.volume,
-        }
+        (self.sound)(self.data.clone())
     }
 }
 

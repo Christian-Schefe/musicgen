@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use fundsp::prelude::Net64;
 
-use crate::{instrument::Instrument, note::Note};
+use super::{instrument::Instrument, tone::Tone};
 
 pub struct Song {
     instruments: Vec<Net64>,
@@ -17,7 +17,7 @@ impl Song {
         }
     }
 
-    pub fn from_instruments(instruments: Vec<(Instrument, &[Note])>) -> Self {
+    pub fn from_instruments(instruments: Vec<(Instrument, &[Tone])>) -> Self {
         let mut song = Song::new();
         instruments
             .into_iter()
@@ -25,15 +25,18 @@ impl Song {
         song
     }
 
-    pub fn add_instrument(&mut self, instrument: Instrument, notes: &[Note]) {
+    pub fn add_instrument(&mut self, instrument: Instrument, notes: &[Tone]) {
         let (net, duration) = instrument.sequence_notes(notes);
         self.duration = self.duration.max(duration);
         self.instruments.push(net);
     }
 
     pub fn mix(self) -> (Net64, Duration) {
-        (self.instruments
-            .into_iter()
-            .fold(Net64::new(0, 2), |x, a| x + a), self.duration + Duration::from_secs_f64(0.2))
+        (
+            self.instruments
+                .into_iter()
+                .fold(Net64::new(0, 2), |x, a| x + a),
+            self.duration + Duration::from_secs_f64(0.2),
+        )
     }
 }
