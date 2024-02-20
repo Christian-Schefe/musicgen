@@ -18,6 +18,7 @@ impl Envelope {
 
 pub trait Synth {
     fn instantiate(&self) -> Net64;
+    fn release_time(&self) -> f64;
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +33,9 @@ pub struct SimpleSynth {
 impl Synth for SimpleSynth {
     fn instantiate(&self) -> Net64 {
         (self.enveloped(self.harmonics_mix()) >> pan(self.pan)) * self.volume
+    }
+    fn release_time(&self) -> f64 {
+        self.envelope.3
     }
 }
 
@@ -86,6 +90,9 @@ impl Synth for SynthFilter {
     fn instantiate(&self) -> Net64 {
         self.highpassed(self.lowpassed(self.synth.instantiate()))
     }
+    fn release_time(&self) -> f64 {
+        self.synth.release_time()
+    }
 }
 
 impl SynthFilter {
@@ -116,13 +123,13 @@ impl SynthFilter {
     }
 }
 
-pub fn keys_synth() -> impl Synth {
+pub fn keys_synth(volume: f64, pan: f64) -> impl Synth {
     let synth = SimpleSynth::new(
         Envelope(0.05, 0.3, 0.6, 0.3),
         [0.25, 0.25, 0.25, 0.25],
         vec![(1.0, 0.6), (0.5, 0.3), (2.0, 0.1)],
-        0.0,
-        1.0,
+        pan,
+        volume,
     );
 
     let filter = Filter::Simple(2000.0, 0.5);

@@ -2,77 +2,57 @@ use std::time::Duration;
 
 use fundsp::hacker::*;
 
-use super::tone::Tone;
+use crate::synth::Synth;
 
-#[derive(Clone)]
-pub struct InstrumentData {
-    pub asdr: (f64, f64, f64, f64),
-    pub pan: f64,
-    pub volume: f64,
-}
+use super::tone::Tone;
 
 pub struct Instrument {
     sequencer: Sequencer64,
     timer: Shared<f64>,
-    data: InstrumentData,
-    sound: Box<dyn Fn(InstrumentData) -> Net64>,
+    synth: Box<dyn Synth>,
 }
 
 impl Instrument {
-    pub fn new(sound: Box<dyn Fn(InstrumentData) -> Net64>, outputs: usize, data: InstrumentData) -> Self {
+    pub fn new(synth: Box<dyn Synth>) -> Self {
         Self {
-            sequencer: Sequencer64::new(true, outputs),
+            sequencer: Sequencer64::new(true, 2),
             timer: shared(0.0),
-            data,
-            sound,
+            synth,
         }
     }
 
     pub fn sequence_notes(mut self, notes: &[Tone]) -> (Net64, Duration) {
-        let mut end_time = 0.0;
+        let mut max_end_time = 0.0;
 
         for note in notes.iter() {
             if note.pitch <= 0.0 {
-                end_time = note.start_time + note.duration;
+                max_end_time = note.start_time + note.duration;
                 continue;
             }
             let unit = self.build_sound(note.clone());
+            let release_time = self.synth.release_time();
+            let end_time = note.start_time + note.duration + release_time;
 
-            self.sequencer.push_duration(
-                note.start_time,
-                note.duration + self.data.asdr.3,
-                Fade::Smooth,
-                0.0,
-                0.0,
-                unit,
-            );
+            self.sequencer
+                .push(note.start_time, end_time, Fade::Smooth, 0.0, 0.0, unit);
 
-            end_time = max(end_time, note.start_time + note.duration + self.data.asdr.3);
+            max_end_time = max(max_end_time, end_time);
         }
         (
             Net64::wrap(Box::new(self.sequencer)) | timer(&self.timer),
-            Duration::from_secs_f64(end_time),
+            Duration::from_secs_f64(max_end_time),
         )
     }
 
     fn build_sound(&mut self, note: Tone) -> Box<dyn AudioUnit64> {
         Box::new(
-            ((constant(note.pitch)
+            (constant(note.pitch)
                 | var_fn(&self.timer, move |time| {
                     asdr_control(time, note.start_time + note.duration)
-                }))
-                >> self.get_sound()) * (constant(note.velocity) | constant(note.velocity)),
+                })
+                | constant(note.velocity))
+                >> self.synth.instantiate(),
         )
-    }
-
-    fn get_sound(&mut self) -> Net64 {
-        (self.sound)(self.data.clone())
-    }
-}
-
-impl InstrumentData {
-    pub fn new(asdr: (f64, f64, f64, f64), pan: f64, volume: f64) -> Self {
-        Self { asdr, pan, volume }
     }
 }
 

@@ -1,16 +1,15 @@
 mod generation;
 mod playback;
-mod sounds;
 mod synth;
 
 use fundsp::hacker::*;
 use generation::structure::generate_structure;
 use playback::song::Song;
-use sounds::*;
 
 use crate::{
     generation::instrumentation::{generate_line, Voicing},
-    playback::playback,
+    playback::{instrument::Instrument, playback},
+    synth::keys_synth,
 };
 
 fn main() {
@@ -23,15 +22,10 @@ fn main() {
 fn run() -> Result<(), anyhow::Error> {
     let mut rng = rand::thread_rng();
 
-    let melody_instrument = lead(0.8, 0.0);
-    let melody_instrument2 = lead(0.2, 0.0);
+    let melody_instrument = Instrument::new(Box::new(keys_synth(1.0, 0.0)));
+    let melody_instrument2 = Instrument::new(Box::new(keys_synth(1.0, 0.0)));
 
-    // let chord_instrument = vibrato_sine_synth(1.0, 0.0);
-    let chord_instrument = generic_synth((0.1, 0.0, 1.0, 0.1), 0.7, 0.0, || {
-        Net64::wrap(Box::new(
-            ((triangle() * 0.7) & (saw() * 0.1) & (square() * 0.2)) >> moog_hz(660.0, 0.5),
-        ))
-    });
+    let chord_instrument = Instrument::new(Box::new(keys_synth(1.0, 0.0)));
 
     let structure = generate_structure(&mut rng, 8);
 
@@ -51,7 +45,7 @@ fn run() -> Result<(), anyhow::Error> {
         (melody_instrument2, &melody2),
         (chord_instrument, &chords),
     ]);
-    // let song = Song::from_instruments(vec![(melody_instrument, &melody)]);
+    
     let (mut net, duration) = song.mix();
 
     let wave = Wave64::render(44100.0, duration.as_secs_f64(), &mut net);
