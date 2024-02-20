@@ -22,10 +22,9 @@ fn main() {
 fn run() -> Result<(), anyhow::Error> {
     let mut rng = rand::thread_rng();
 
-    let melody_instrument = Instrument::new(Box::new(keys_synth(1.0, 0.0)));
-    let melody_instrument2 = Instrument::new(Box::new(keys_synth(1.0, 0.0)));
-
-    let chord_instrument = Instrument::new(Box::new(keys_synth(1.0, 0.0)));
+    let melody_instrument = Instrument::new(Box::new(keys_synth(1.0)));
+    let melody_instrument2 = Instrument::new(Box::new(keys_synth(1.0)));
+    let chord_instrument = Instrument::new(Box::new(keys_synth(1.0)));
 
     let structure = generate_structure(&mut rng, 8);
 
@@ -45,7 +44,7 @@ fn run() -> Result<(), anyhow::Error> {
         (melody_instrument2, &melody2),
         (chord_instrument, &chords),
     ]);
-    
+
     let (mut net, duration) = song.mix();
 
     let wave = Wave64::render(44100.0, duration.as_secs_f64(), &mut net);

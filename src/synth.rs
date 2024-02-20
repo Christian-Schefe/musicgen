@@ -26,13 +26,11 @@ pub struct SimpleSynth {
     pub envelope: Envelope,
     pub mix: [f64; 4],
     pub harmonics: Vec<(f64, f64)>,
-    pub pan: f64,
-    pub volume: f64,
 }
 
 impl Synth for SimpleSynth {
     fn instantiate(&self) -> Net64 {
-        (self.enveloped(self.harmonics_mix()) >> pan(self.pan)) * self.volume
+        self.enveloped(self.harmonics_mix())
     }
     fn release_time(&self) -> f64 {
         self.envelope.3
@@ -40,19 +38,11 @@ impl Synth for SimpleSynth {
 }
 
 impl SimpleSynth {
-    fn new(
-        envelope: Envelope,
-        mix: [f64; 4],
-        harmonics: Vec<(f64, f64)>,
-        pan: f64,
-        volume: f64,
-    ) -> Self {
+    fn new(envelope: Envelope, mix: [f64; 4], harmonics: Vec<(f64, f64)>) -> Self {
         Self {
             envelope,
             mix,
             harmonics,
-            pan,
-            volume,
         }
     }
     fn enveloped(&self, net: Net64) -> Net64 {
@@ -74,6 +64,7 @@ impl SimpleSynth {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Filter {
     Thru,
     Simple(f64, f64),
@@ -123,16 +114,81 @@ impl SynthFilter {
     }
 }
 
-pub fn keys_synth(volume: f64, pan: f64) -> impl Synth {
+pub struct SynthMaster {
+    pub synth: Box<dyn Synth>,
+    pub reverb_size: f64,
+    pub reverb_time: f64,
+    pub reverb_mix: f64,
+    pub pan: f64,
+    pub volume: f64,
+}
+
+impl Synth for SynthMaster {
+    fn instantiate(&self) -> Net64 {
+        (self.synth.instantiate()
+            >> pan(self.pan)
+            >> (multipass() & self.reverb_mix * reverb_stereo(self.reverb_size, self.reverb_time)))
+            * self.volume
+    }
+    fn release_time(&self) -> f64 {
+        self.synth.release_time()
+    }
+}
+
+impl SynthMaster {
+    pub fn new(
+        synth: Box<dyn Synth>,
+        reverb_size: f64,
+        reverb_time: f64,
+        reverb_mix: f64,
+        pan: f64,
+        volume: f64,
+    ) -> Self {
+        Self {
+            synth,
+            reverb_size,
+            reverb_time,
+            reverb_mix,
+            pan,
+            volume,
+        }
+    }
+}
+
+pub struct SynthVibrato {
+    pub synth: Box<dyn Synth>,
+    pub frequency: f64,
+    pub amplitude: f64,
+}
+
+impl Synth for SynthVibrato {
+    fn instantiate(&self) -> Net64 {
+        (((1.0 + self.amplitude * sine_hz(self.frequency)) * pass()) | pass() | pass())
+            >> self.synth.instantiate()
+    }
+    fn release_time(&self) -> f64 {
+        self.synth.release_time()
+    }
+}
+
+impl SynthVibrato {
+    pub fn new(synth: Box<dyn Synth>, frequency: f64, amplitude: f64) -> Self {
+        Self {
+            synth,
+            frequency,
+            amplitude,
+        }
+    }
+}
+
+pub fn keys_synth(volume: f64) -> impl Synth {
     let synth = SimpleSynth::new(
         Envelope(0.05, 0.3, 0.6, 0.3),
         [0.25, 0.25, 0.25, 0.25],
         vec![(1.0, 0.6), (0.5, 0.3), (2.0, 0.1)],
-        pan,
-        volume,
     );
 
     let filter = Filter::Simple(2000.0, 0.5);
     let filtered_synth = SynthFilter::new(Box::new(synth), filter, Filter::Thru);
-    filtered_synth
+    SynthMaster::new(Box::new(filtered_synth), 10.0, 5.0, 0.2, 0.0, volume)
 }
