@@ -1,6 +1,7 @@
 mod generation;
 mod playback;
 mod sounds;
+mod synth;
 
 use fundsp::hacker::*;
 use generation::structure::generate_structure;
