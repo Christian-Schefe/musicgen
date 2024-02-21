@@ -74,22 +74,18 @@ fn pattern_melody(
 
     for &dur in pattern {
         let duration = dur * piece.beats_per_measure as f64;
-        let options: Vec<u8> = (0..2).map(|_| chord.rand_from_range(rng, range)).collect();
+        let options: Vec<u8> = (0..5).map(|_| chord.rand_from_range(rng, range)).collect();
         let pitch = if let Some(p) = last_pitch {
             let mut best = options[0];
-            let mut best_dist = p.abs_diff(best);
-            for &opt in options[1..].iter() {
+            let mut best_dist = u8::MAX;
+            for &opt in options.iter() {
                 let dist = p.abs_diff(opt);
-                if dist < best_dist {
+                if dist < best_dist && dist > 0 {
                     best = opt;
                     best_dist = dist;
                 }
             }
-            if best_dist == 0 && rng.gen_bool(0.4) {
-                options[0]
-            } else {
-                best
-            }
+            best
         } else {
             options[0]
         };

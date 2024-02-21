@@ -1,3 +1,5 @@
+use std::{sync::Arc, marker::PhantomData};
+
 use crate::hacker::*;
 
 #[derive(Debug, Clone)]
@@ -30,7 +32,7 @@ pub struct SimpleSynth {
 
 impl Synth for SimpleSynth {
     fn instantiate(&self) -> Net64 {
-        self.enveloped(self.harmonics_mix())
+        self.volume_adjusted(self.harmonics_mix())
     }
     fn release_time(&self) -> f64 {
         self.envelope.3
@@ -45,7 +47,7 @@ impl SimpleSynth {
             harmonics,
         }
     }
-    fn enveloped(&self, net: Net64) -> Net64 {
+    fn volume_adjusted(&self, net: Net64) -> Net64 {
         net * self.envelope.as_asdr() * pass()
     }
     fn harmonics_mix(&self) -> Net64 {
@@ -68,6 +70,7 @@ impl SimpleSynth {
 pub enum Filter {
     Thru,
     Simple(f64, f64),
+    KeyTracked((f64, f64), (f64, f64), f64),
     Enveloped(Envelope, (f64, f64), f64),
 }
 
@@ -101,6 +104,13 @@ impl SynthFilter {
             Filter::Enveloped(env, (min, max), q) => {
                 (synth ^ (sink() | env.ranged_asdr(*min, *max) | sink())) >> lowpass_q(*q)
             }
+            Filter::KeyTracked((f_min, f_max), (key_min, key_max), q) => {
+                (synth
+                    ^ (self.keytracked_freq((*f_min, *f_max), (*key_min, *key_max))
+                        | sink()
+                        | sink()))
+                    >> lowpass_q(*q)
+            }
         }
     }
     fn highpassed(&self, synth: Net64) -> Net64 {
@@ -110,7 +120,24 @@ impl SynthFilter {
             Filter::Enveloped(env, (min, max), q) => {
                 (synth ^ (sink() | env.ranged_asdr(*min, *max) | sink())) >> highpass_q(*q)
             }
+            Filter::KeyTracked((f_min, f_max), (key_min, key_max), q) => {
+                (synth
+                    ^ (self.keytracked_freq((*f_min, *f_max), (*key_min, *key_max))
+                        | sink()
+                        | sink()))
+                    >> highpass_q(*q)
+            }
         }
+    }
+    fn keytracked_freq(
+        &self,
+        freq_range: (f64, f64),
+        key_range: (f64, f64),
+    ) -> An<impl AudioNode<Sample = f64, Inputs = U1, Outputs = U1>> {
+        freq_range.0
+            + (freq_range.1 - freq_range.0)
+                * (pass() - midi_hz(key_range.0))
+                * (1.0 / (midi_hz(key_range.1) - midi_hz(key_range.0)))
     }
 }
 
@@ -181,14 +208,69 @@ impl SynthVibrato {
     }
 }
 
+pub struct SynthLayer {
+    pub layers: Vec<(Box<dyn Synth>, f64)>,
+}
+
+impl Synth for SynthLayer {
+    fn instantiate(&self) -> Net64 {
+        self.layers.iter().fold(Net64::new(3, 1), Self::mix_layer)
+    }
+    fn release_time(&self) -> f64 {
+        self.layers
+            .iter()
+            .map(|x| x.0.release_time())
+            .reduce(f64::max)
+            .unwrap()
+    }
+}
+
+impl SynthLayer {
+    pub fn new(layers: Vec<(Box<dyn Synth>, f64)>) -> Self {
+        Self { layers }
+    }
+    fn mix_layer(synth: Net64, layer: &(Box<dyn Synth>, f64)) -> Net64 {
+        synth & (layer.0.instantiate() * layer.1)
+    }
+}
+
 pub fn keys_synth(volume: f64) -> impl Synth {
     let synth = SimpleSynth::new(
-        Envelope(0.05, 0.3, 0.6, 0.3),
-        [0.25, 0.25, 0.25, 0.25],
-        vec![(1.0, 0.6), (0.5, 0.3), (2.0, 0.1)],
+        Envelope(0.02, 0.45, 0.0, 0.45),
+        [0.0, 0.05, 0.75, 0.2],
+        vec![(1.0, 0.8), (0.5, 0.1), (2.0, 0.1)],
     );
 
-    let filter = Filter::Simple(2000.0, 0.5);
-    let filtered_synth = SynthFilter::new(Box::new(synth), filter, Filter::Thru);
-    SynthMaster::new(Box::new(filtered_synth), 10.0, 5.0, 0.2, 0.0, volume)
+    let synth2 = SimpleSynth::new(
+        Envelope(0.02, 2.0, 0.0, 0.0),
+        [0.0, 0.0, 0.5, 0.5],
+        vec![(1.0, 0.9), (0.5, 0.05), (2.0, 0.05)],
+    );
+
+    let low_filter = Filter::KeyTracked((4000.0, 6000.0), (60.0, 72.0), 0.1);
+    let high_filter = Filter::Simple(200.0, 0.5);
+
+    let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
+    let layerd_synth = SynthLayer::new(vec![
+        (Box::new(filtered_synth), 1.0),
+        (Box::new(synth2), 0.1),
+    ]);
+
+    SynthMaster::new(Box::new(layerd_synth), 10.0, 2.5, 0.0, 0.0, volume)
+}
+
+pub fn strings_synth(volume: f64) -> impl Synth {
+    let synth = SimpleSynth::new(
+        Envelope(0.3, 1.0, 0.8, 0.1),
+        [0.7, 0.2, 0.05, 0.05],
+        vec![(1.0, 0.8), (0.5, 0.2), (2.0, 0.2)],
+    );
+
+    let low_filter = Filter::KeyTracked((6000.0, 10000.0), (60.0, 72.0), 0.1);
+    let high_filter = Filter::Simple(200.0, 0.5);
+
+    let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
+    let vibrato_synth = SynthVibrato::new(Box::new(filtered_synth), 5.0, 0.005);
+
+    SynthMaster::new(Box::new(vibrato_synth), 10.0, 2.5, 1.0, 0.0, volume)
 }

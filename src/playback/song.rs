@@ -26,8 +26,9 @@ impl Song {
     }
 
     pub fn add_instrument(&mut self, instrument: Instrument, notes: &[Tone]) {
+        let release_time = instrument.release_time();
         let (net, duration) = instrument.sequence_notes(notes);
-        self.duration = self.duration.max(duration);
+        self.duration = self.duration.max(duration + Duration::from_secs_f64(release_time));
         self.instruments.push(net);
     }
 
@@ -36,7 +37,7 @@ impl Song {
             self.instruments
                 .into_iter()
                 .fold(Net64::new(0, 2), |x, a| x + a),
-            self.duration + Duration::from_secs_f64(0.2),
+            self.duration + Duration::from_secs_f64(0.5),
         )
     }
 }

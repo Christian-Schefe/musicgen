@@ -36,7 +36,7 @@ impl Instrument {
             self.sequencer
                 .push(note.start_time, end_time, Fade::Smooth, 0.0, 0.0, unit);
 
-            max_end_time = max(max_end_time, end_time);
+            max_end_time = max_end_time.max(end_time);
         }
         (
             Net64::wrap(Box::new(self.sequencer)) | timer(&self.timer),
@@ -53,6 +53,9 @@ impl Instrument {
                 | constant(note.velocity))
                 >> self.synth.instantiate(),
         )
+    }
+    pub fn release_time(&self) -> f64 {
+        self.synth.release_time()
     }
 }
 
