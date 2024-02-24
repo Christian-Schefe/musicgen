@@ -32,7 +32,7 @@ impl Instrument {
             let end_time = note.start_time + note.duration + release_time;
 
             self.sequencer
-                .push(note.start_time, end_time, Fade::Smooth, 0.0, 0.0, unit);
+                .push(note.start_time, end_time, Fade::Smooth, 0.01, 0.01, unit);
 
             max_end_time = max_end_time.max(end_time);
         }

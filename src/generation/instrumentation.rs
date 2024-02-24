@@ -15,8 +15,7 @@ pub fn generate_line(rng: &mut ThreadRng, piece: &Piece, voicing: Voicing) -> Ve
     piece
         .phrases
         .iter()
-        .map(|x| generate_phrase_line(rng, piece, x, &voicing, &mut passed_beats))
-        .flatten()
+        .flat_map(|x| generate_phrase_line(rng, piece, x, &voicing, &mut passed_beats))
         .collect()
 }
 
@@ -30,13 +29,12 @@ fn generate_phrase_line(
     phrase
         .harmony
         .iter()
-        .map(|x| match voicing {
+        .flat_map(|x| match voicing {
             Voicing::Melody(range) => {
                 generate_melody_over_chord(rng, piece, x, beats_passed, range)
             }
             Voicing::Chords(range) => generate_chord_notes(rng, piece, x, beats_passed, range),
         })
-        .flatten()
         .collect()
 }
 
@@ -55,6 +53,11 @@ fn generate_melody_over_chord(
         vec![0.25, 0.25, 0.5],
         vec![0.5, 0.25, 0.25],
         vec![0.25, 0.25, 0.25, 0.25],
+        vec![0.125, 0.125, 0.75],
+        vec![0.125, 0.125, 0.125, 0.125, 0.5],
+        vec![0.5, 0.125, 0.125, 0.125, 0.125],
+        vec![0.25, 0.125, 0.125, 0.5],
+        vec![0.5, 0.125, 0.125, 0.25],
     ];
     let pattern = &patterns[rng.gen_range(0..patterns.len())];
     pattern_melody(rng, pattern, piece, chord, beats_passed, range)
@@ -74,7 +77,7 @@ fn pattern_melody(
 
     for &dur in pattern {
         let duration = dur * piece.beats_per_measure as f64;
-        let options: Vec<u8> = (0..5).map(|_| chord.rand_from_range(rng, range)).collect();
+        let options: Vec<u8> = (0..10).map(|_| chord.rand_from_range(rng, range)).collect();
         let pitch = if let Some(p) = last_pitch {
             let mut best = options[0];
             let mut best_dist = u8::MAX;

@@ -57,6 +57,20 @@ impl Key {
             [0, 2, 3, 5, 7, 8, 10]
         }
     }
+    pub fn to_index(&self, pitch: u8) -> Option<u8> {
+        let tonic_midi = self.1.midi();
+        let interval = if tonic_midi < pitch {
+            tonic_midi.abs_diff(pitch) % 12
+        } else {
+            (12 - (tonic_midi.abs_diff(pitch) % 12)) % 12
+        };
+        let offsets = self.offsets();
+        let pos = offsets.iter().position(|x| *x == interval);
+        pos.map(|x| x.try_into().unwrap())
+    }
+    pub fn from_index(&self, index: u8) -> Note {
+        self.1.shift_by(self.offsets()[(index % 7) as usize])
+    }
     pub fn build_chord(&self, tonic: u8) -> Chord {
         let index = tonic as usize;
         let scale = self.scale();
