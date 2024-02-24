@@ -1,5 +1,3 @@
-use std::{sync::Arc, marker::PhantomData};
-
 use crate::hacker::*;
 
 #[derive(Debug, Clone)]
@@ -184,14 +182,13 @@ impl SynthMaster {
 
 pub struct SynthVibrato {
     pub synth: Box<dyn Synth>,
-    pub frequency: f64,
-    pub amplitude: f64,
+    pub frequency: Parameter,
+    pub amplitude: Parameter,
 }
 
 impl Synth for SynthVibrato {
     fn instantiate(&self) -> Net64 {
-        (((1.0 + self.amplitude * sine_hz(self.frequency)) * pass()) | pass() | pass())
-            >> self.synth.instantiate()
+        self.freq_mod() >> self.synth.instantiate()
     }
     fn release_time(&self) -> f64 {
         self.synth.release_time()
@@ -199,12 +196,18 @@ impl Synth for SynthVibrato {
 }
 
 impl SynthVibrato {
-    pub fn new(synth: Box<dyn Synth>, frequency: f64, amplitude: f64) -> Self {
+    pub fn new(synth: Box<dyn Synth>, frequency: Parameter, amplitude: Parameter) -> Self {
         Self {
             synth,
             frequency,
             amplitude,
         }
+    }
+    fn freq_mod(&self) -> Net64 {
+        (pass()
+            | (self.amplitude.as_node() ^ (self.frequency.as_node() >> sine()) ^ pass())
+            | pass())
+            >> ((pass() * (1.0 + pass() * pass())) | pass() | pass())
     }
 }
 
@@ -270,7 +273,27 @@ pub fn strings_synth(volume: f64) -> impl Synth {
     let high_filter = Filter::Simple(200.0, 0.5);
 
     let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
-    let vibrato_synth = SynthVibrato::new(Box::new(filtered_synth), 5.0, 0.005);
+    let vibrato_synth = SynthVibrato::new(
+        Box::new(filtered_synth),
+        Parameter::Const(5.0),
+        Parameter::Enveloped(Envelope(2.0, 0.0, 1.0, 0.0), 0.0, 0.006),
+    );
 
     SynthMaster::new(Box::new(vibrato_synth), 10.0, 2.5, 1.0, 0.0, volume)
+}
+
+pub enum Parameter {
+    Const(f64),
+    Enveloped(Envelope, f64, f64),
+}
+
+impl Parameter {
+    pub fn as_node(&self) -> Net64 {
+        match self {
+            Self::Const(val) => Net64::wrap(Box::new(sink() | constant(*val))),
+            Self::Enveloped(envelope, min_val, max_val) => {
+                Net64::wrap(Box::new(envelope.ranged_asdr(*min_val, *max_val)))
+            }
+        }
+    }
 }

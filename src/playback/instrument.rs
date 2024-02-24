@@ -2,9 +2,7 @@ use std::time::Duration;
 
 use fundsp::hacker::*;
 
-use crate::synth::Synth;
-
-use super::tone::Tone;
+use super::{tone::Tone, synth::Synth};
 
 pub struct Instrument {
     sequencer: Sequencer64,
@@ -21,7 +19,7 @@ impl Instrument {
         }
     }
 
-    pub fn sequence_notes(mut self, notes: &[Tone]) -> (Net64, Duration) {
+    pub fn sequence_notes(mut self, notes: &[Tone]) -> Sound {
         let mut max_end_time = 0.0;
 
         for note in notes.iter() {
@@ -38,7 +36,7 @@ impl Instrument {
 
             max_end_time = max_end_time.max(end_time);
         }
-        (
+        Sound(
             Net64::wrap(Box::new(self.sequencer)) | timer(&self.timer),
             Duration::from_secs_f64(max_end_time),
         )
@@ -54,9 +52,6 @@ impl Instrument {
                 >> self.synth.instantiate(),
         )
     }
-    pub fn release_time(&self) -> f64 {
-        self.synth.release_time()
-    }
 }
 
 fn asdr_control(time: f64, end_time: f64) -> f64 {
@@ -65,4 +60,20 @@ fn asdr_control(time: f64, end_time: f64) -> f64 {
     } else {
         -1.0
     }
+}
+
+pub struct Sound(pub Net64, pub Duration);
+
+impl Sound {
+    fn mix(self, other: Self) -> Self {
+        Self(self.0 + other.0, self.1.max(other.1))
+    }
+}
+
+pub fn mix_instruments(instruments: Vec<(Instrument, Vec<Tone>)>) -> Sound {
+    instruments
+        .into_iter()
+        .map(|(i, n)| i.sequence_notes(&n))
+        .reduce(Sound::mix)
+        .unwrap()
 }

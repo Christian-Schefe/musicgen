@@ -1,14 +1,14 @@
 pub mod instrument;
-pub mod song;
+pub mod synth;
 pub mod tone;
-
-use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SizedSample, Stream};
 use fundsp::hacker::*;
 
-pub fn playback(sound: Net64, duration: Duration) -> Result<(), anyhow::Error> {
+use self::instrument::Sound;
+
+pub fn playback(sound: Sound) -> Result<(), anyhow::Error> {
     let host = cpal::default_host();
     let device = host
         .default_output_device()
@@ -16,14 +16,14 @@ pub fn playback(sound: Net64, duration: Duration) -> Result<(), anyhow::Error> {
     let config = device.default_output_config().unwrap();
 
     let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => run::<f32>(&device, &config.into(), sound),
-        cpal::SampleFormat::I16 => run::<i16>(&device, &config.into(), sound),
-        cpal::SampleFormat::U16 => run::<u16>(&device, &config.into(), sound),
+        cpal::SampleFormat::F32 => run::<f32>(&device, &config.into(), sound.0),
+        cpal::SampleFormat::I16 => run::<i16>(&device, &config.into(), sound.0),
+        cpal::SampleFormat::U16 => run::<u16>(&device, &config.into(), sound.0),
         _ => panic!("Unsupported format"),
     }?;
 
     stream.play()?;
-    std::thread::sleep(duration);
+    std::thread::sleep(sound.1);
     Ok(())
 }
 

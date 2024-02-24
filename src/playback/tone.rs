@@ -19,11 +19,6 @@ impl Tone {
     }
 
     pub fn midi(start_time: f64, duration: f64, pitch: f64, velocity: f64) -> Self {
-        Self {
-            start_time,
-            duration,
-            pitch: midi_hz(pitch),
-            velocity: velocity / 127.0,
-        }
+        Self::new(start_time, duration, midi_hz(pitch), velocity / 127.0)
     }
 }
