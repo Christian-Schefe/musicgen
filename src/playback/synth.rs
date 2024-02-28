@@ -1,5 +1,7 @@
 use crate::hacker::*;
 
+use super::components::{hz_midi, remap};
+
 #[derive(Debug, Clone)]
 pub struct Envelope(pub f64, pub f64, pub f64, pub f64);
 
@@ -20,7 +22,7 @@ impl Envelope {
 pub enum Parameter {
     Const(f64),
     Enveloped(Envelope, f64, f64),
-    KeyTracked(f64, f64, f64, f64),
+    KeyTracked((f64, f64), (f64, f64), bool),
 }
 
 impl Parameter {
@@ -30,20 +32,26 @@ impl Parameter {
             Self::Enveloped(envelope, min_val, max_val) => Net64::wrap(Box::new(
                 sink() | envelope.ranged_asdr(*min_val, *max_val) | sink(),
             )),
-            Self::KeyTracked(kmi, kma, vmi, vma) => Net64::wrap(Box::new(
-                self.keytracked_freq((*kmi, *kma), (*vmi, *vma)) | multisink::<U2>(),
+            Self::KeyTracked(in_range, out_range, is_midi) => Net64::wrap(Box::new(
+                self.keytracked(in_range, out_range, *is_midi) | multisink::<U2>(),
             )),
         }
     }
-    fn keytracked_freq(
+    fn keytracked(
         &self,
-        freq_range: (f64, f64),
-        key_range: (f64, f64),
+        in_range: &(f64, f64),
+        out_range: &(f64, f64),
+        track_midi: bool,
     ) -> An<impl AudioNode<Sample = f64, Inputs = U1, Outputs = U1>> {
-        freq_range.0
-            + (freq_range.1 - freq_range.0)
-                * (pass() - midi_hz(key_range.0))
-                * (1.0 / (midi_hz(key_range.1) - midi_hz(key_range.0)))
+        let in_min = in_range.0;
+        let in_max = in_range.1;
+        let out_min = out_range.0;
+        let out_max = out_range.1;
+        map(move |x: &Frame<f64, U1>| {
+            let midi = if track_midi { hz_midi(x[0]) } else { x[0] };
+            let val = remap(midi, in_min, in_max, out_min, out_max);
+            val
+        })
     }
 }
 
@@ -187,7 +195,7 @@ pub struct SynthVibrato {
 
 impl Synth for SynthVibrato {
     fn instantiate(&self) -> Net64 {
-        self.freq_mod(self.synth.instantiate())
+        self.vibrato(self.synth.instantiate())
     }
     fn release_time(&self) -> f64 {
         self.synth.release_time()
@@ -202,12 +210,19 @@ impl SynthVibrato {
             amplitude,
         }
     }
-    fn freq_mod(&self, synth: Net64) -> Net64 {
-        let stream = (pass() | sink() | sink())
-            ^ self.amplitude.as_node()
-            ^ (self.frequency.as_node() >> sine())
-            ^ (sink() | pass() | pass());
-        stream >> ((pass() * (1.0 + pass() * pass())) | pass() | pass()) >> synth
+    fn vibrato(&self, synth: Net64) -> Net64 {
+        // (multipass::<U3>() ^ self.amplitude.as_node() ^ (self.frequency.as_node() >> sine()))
+        //     >> map(|x: &Frame<f64, U5>| (x[0] * (1.0 + x[3] * x[4]), x[1], x[2]))
+        //     >> synth
+        (multipass::<U3>() ^ self.amplitude.as_node() ^ (self.frequency.as_node() >> sine()))
+            >> map(|x: &Frame<f64, U5>| {
+                (
+                    x[0] * xerp(1.0 + x[3], 1.0 / (1.0 + x[3]), x[4]),
+                    x[1],
+                    x[2],
+                )
+            })
+            >> synth
     }
 }
 
@@ -251,7 +266,7 @@ pub fn keys_synth(volume: f64) -> impl Synth {
     );
 
     let low_filter = Some(Filter(
-        Parameter::KeyTracked(4000.0, 6000.0, 60.0, 72.0),
+        Parameter::KeyTracked((60.0, 72.0), (4000.0, 6000.0), true),
         0.1,
     ));
     let high_filter = Some(Filter(Parameter::Const(200.0), 0.5));
@@ -273,7 +288,7 @@ pub fn strings_synth(volume: f64) -> impl Synth {
     );
 
     let low_filter = Some(Filter(
-        Parameter::KeyTracked(6000.0, 10000.0, 60.0, 72.0),
+        Parameter::KeyTracked((60.0, 72.0), (6000.0, 10000.0), true),
         0.1,
     ));
     let high_filter = Some(Filter(Parameter::Const(200.0), 0.5));
