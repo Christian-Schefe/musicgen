@@ -1,5 +1,6 @@
 mod generation;
 mod playback;
+mod score;
 
 use fundsp::hacker::*;
 use generation::structure::generate_structure;
