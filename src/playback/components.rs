@@ -108,6 +108,42 @@ pub fn remap<T: Real>(val: T, in_min: T, in_max: T, out_min: T, out_max: T) -> T
     lerp(out_min, out_max, delerp(in_min, in_max, val))
 }
 
+pub fn smooth_damp(
+    current: f64,
+    target: f64,
+    current_velocity: Shared<f64>,
+    smooth_time: f64,
+    max_speed: f64,
+    delta_time: f64,
+) -> f64 {
+    // Based on Game Programming Gems 4 Chapter 1.10
+    let smooth_time = smooth_time.max(0.0001);
+    let omega = 2.0 / smooth_time;
+
+    let x = omega * delta_time;
+    let exp = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
+    let mut change = current - target;
+    let original_to = target;
+
+    // Clamp maximum speed
+    let max_change = max_speed * smooth_time;
+    change = change.clamp(-max_change, max_change);
+
+    let target = current - change;
+
+    let temp = (current_velocity.value() + omega * change) * delta_time;
+    current_velocity.set((current_velocity.value() - omega * temp) * exp);
+    let mut output = target + (change + temp) * exp;
+
+    // Prevent overshooting
+    if (original_to - current > 0.0) == (output > original_to) {
+        output = original_to;
+        current_velocity.set_value((output - original_to) / delta_time);
+    }
+
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

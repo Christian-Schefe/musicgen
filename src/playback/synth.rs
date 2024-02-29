@@ -1,6 +1,6 @@
 use crate::hacker::*;
 
-use super::components::{hz_midi, remap};
+use super::components::{hz_midi, remap, smooth_damp};
 
 #[derive(Debug, Clone)]
 pub struct Envelope(pub f64, pub f64, pub f64, pub f64);
@@ -226,6 +226,60 @@ impl SynthVibrato {
     }
 }
 
+pub struct SynthFollowFreq {
+    pub synth: Box<dyn Synth>,
+    pub follow_time: Parameter,
+    delta_time: f64,
+    current: f64,
+    current_velocity: Shared<f64>,
+    max_speed: f64,
+}
+
+impl Synth for SynthFollowFreq {
+    fn instantiate(&self) -> Net64 {
+        self.follow(self.synth.instantiate())
+    }
+    fn release_time(&self) -> f64 {
+        self.synth.release_time()
+    }
+}
+
+impl SynthFollowFreq {
+    pub fn new(synth: Box<dyn Synth>, follow_time: Parameter) -> Self {
+        Self {
+            synth,
+            follow_time,
+            delta_time: 1.0 / 44100.0,
+            current: 0.0,
+            current_velocity: shared(0.0),
+            max_speed: 0.0,
+        }
+    }
+    fn follow(&self, synth: Net64) -> Net64 {
+        let current = self.current;
+        let current_velocity = self.current_velocity.clone();
+        let max_speed = self.max_speed;
+        let delta_time = self.delta_time;
+
+        (multipass::<U3>() ^ self.follow_time.as_node())
+            >> map(move |x: &Frame<f64, U4>| {
+                (
+                    smooth_damp(
+                        current,
+                        x[0],
+                        current_velocity.clone(),
+                        x[3],
+                        max_speed,
+                        delta_time,
+                    ),
+                    x[1],
+                    x[2],
+                )
+            })
+            >> synth
+    }
+}
+
 pub struct SynthLayer {
     pub layers: Vec<(Box<dyn Synth>, f64)>,
 }
@@ -301,4 +355,23 @@ pub fn strings_synth(volume: f64) -> impl Synth {
     );
 
     SynthMaster::new(Box::new(vibrato_synth), 10.0, 2.5, 1.0, 0.0, volume)
+}
+
+pub fn soft_follow(volume: f64) -> impl Synth {
+    let synth = SimpleSynth::new(
+        Envelope(0.001, 0.0, 1.0, 0.001),
+        [0.2, 0.2, 0.55, 0.05],
+        vec![(1.0, 1.0)],
+    );
+
+    let low_filter = Some(Filter(
+        Parameter::KeyTracked((60.0, 72.0), (6000.0, 10000.0), true),
+        0.1,
+    ));
+    let high_filter = Some(Filter(Parameter::Const(200.0), 0.5));
+
+    let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
+    let follow_synth = SynthFollowFreq::new(Box::new(filtered_synth), Parameter::Const(2.0));
+
+    SynthMaster::new(Box::new(follow_synth), 10.0, 2.5, 1.0, 0.0, volume)
 }
