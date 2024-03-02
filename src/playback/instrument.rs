@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use fundsp::hacker::*;
 
-use super::{tone::Tone, synth::Synth};
+use super::synth::Synth;
 
 pub struct Instrument {
     sequencer: Sequencer64,
@@ -76,4 +76,27 @@ pub fn mix_instruments(instruments: Vec<(Instrument, Vec<Tone>)>) -> Sound {
         .map(|(i, n)| i.sequence_notes(&n))
         .reduce(Sound::mix)
         .unwrap()
+}
+
+#[derive(Clone, Debug)]
+pub struct Tone {
+    pub start_time: f64,
+    pub duration: f64,
+    pub pitch: f64,
+    pub velocity: f64,
+}
+
+impl Tone {
+    pub fn new(start_time: f64, duration: f64, pitch: f64, velocity: f64) -> Self {
+        Self {
+            start_time,
+            duration,
+            pitch,
+            velocity,
+        }
+    }
+
+    pub fn midi(start_time: f64, duration: f64, pitch: f64, velocity: f64) -> Self {
+        Self::new(start_time, duration, midi_hz(pitch), velocity / 127.0)
+    }
 }

@@ -1,8 +1,7 @@
 use rand::{rngs::ThreadRng, Rng};
 
 use crate::{
-    generation::{music::Note, rhythm::gen_rythm},
-    playback::tone::Tone,
+    generation::{music::Note, rhythm::gen_rythm}, playback::instrument::Tone,
 };
 
 use super::music::Piece;

@@ -1,7 +1,6 @@
 pub mod instrument;
 pub mod synth;
-pub mod tone;
-pub mod components;
+pub mod math;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SizedSample, Stream};

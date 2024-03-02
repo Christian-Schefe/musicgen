@@ -1,6 +1,6 @@
 use crate::hacker::*;
 
-use super::components::{hz_midi, remap, smooth_damp};
+use super::math::{compress, compress_up, distort, hz_midi, remap};
 
 #[derive(Debug, Clone)]
 pub struct Envelope(pub f64, pub f64, pub f64, pub f64);
@@ -61,9 +61,32 @@ pub trait Synth {
 }
 
 #[derive(Debug, Clone)]
+pub struct WaveMix {
+    square: f64,
+    saw: f64,
+    sine: f64,
+    triangle: f64,
+    pulse: f64,
+    noise: f64,
+}
+
+impl WaveMix {
+    fn new(square: f64, saw: f64, sine: f64, triangle: f64, pulse: f64, noise: f64) -> Self {
+        Self {
+            square,
+            saw,
+            sine,
+            triangle,
+            pulse,
+            noise,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SimpleSynth {
     pub envelope: Envelope,
-    pub mix: [f64; 4],
+    pub mix: WaveMix,
     pub harmonics: Vec<(f64, f64)>,
 }
 
@@ -77,7 +100,7 @@ impl Synth for SimpleSynth {
 }
 
 impl SimpleSynth {
-    fn new(envelope: Envelope, mix: [f64; 4], harmonics: Vec<(f64, f64)>) -> Self {
+    fn new(envelope: Envelope, mix: WaveMix, harmonics: Vec<(f64, f64)>) -> Self {
         Self {
             envelope,
             mix,
@@ -96,10 +119,12 @@ impl SimpleSynth {
         net
     }
     fn waveform_mix(&self) -> An<impl AudioNode<Sample = f64, Inputs = U1, Outputs = U1>> {
-        (saw() * self.mix[0])
-            & (square() * self.mix[1])
-            & (triangle() * self.mix[2])
-            & (sine() * self.mix[3])
+        (saw() * self.mix.saw)
+            & (square() * self.mix.square)
+            & (triangle() * self.mix.triangle)
+            & (sine() * self.mix.sine)
+            & (((pass() | constant(0.0)) >> pulse()) * self.mix.pulse)
+            & (sink() | noise() * self.mix.noise)
     }
 }
 
@@ -226,57 +251,36 @@ impl SynthVibrato {
     }
 }
 
-pub struct SynthFollowFreq {
+pub struct SynthEffect<F, T>
+where
+    F: Fn() -> T,
+    T: AudioUnit64,
+{
     pub synth: Box<dyn Synth>,
-    pub follow_time: Parameter,
-    delta_time: f64,
-    current: f64,
-    current_velocity: Shared<f64>,
-    max_speed: f64,
+    pub effect: F,
 }
 
-impl Synth for SynthFollowFreq {
+impl<F, T> Synth for SynthEffect<F, T>
+where
+    F: Fn() -> T,
+    T: AudioUnit64 + 'static,
+{
     fn instantiate(&self) -> Net64 {
-        self.follow(self.synth.instantiate())
+        let node = (self.effect)();
+        self.synth.instantiate() >> Net64::wrap(Box::new(node))
     }
     fn release_time(&self) -> f64 {
         self.synth.release_time()
     }
 }
 
-impl SynthFollowFreq {
-    pub fn new(synth: Box<dyn Synth>, follow_time: Parameter) -> Self {
-        Self {
-            synth,
-            follow_time,
-            delta_time: 1.0 / 44100.0,
-            current: 0.0,
-            current_velocity: shared(0.0),
-            max_speed: 0.0,
-        }
-    }
-    fn follow(&self, synth: Net64) -> Net64 {
-        let current = self.current;
-        let current_velocity = self.current_velocity.clone();
-        let max_speed = self.max_speed;
-        let delta_time = self.delta_time;
-
-        (multipass::<U3>() ^ self.follow_time.as_node())
-            >> map(move |x: &Frame<f64, U4>| {
-                (
-                    smooth_damp(
-                        current,
-                        x[0],
-                        current_velocity.clone(),
-                        x[3],
-                        max_speed,
-                        delta_time,
-                    ),
-                    x[1],
-                    x[2],
-                )
-            })
-            >> synth
+impl<F, T> SynthEffect<F, T>
+where
+    F: Fn() -> T,
+    T: AudioUnit64,
+{
+    pub fn new(synth: Box<dyn Synth>, effect: F) -> Self {
+        Self { synth, effect }
     }
 }
 
@@ -309,13 +313,13 @@ impl SynthLayer {
 pub fn keys_synth(volume: f64) -> impl Synth {
     let synth = SimpleSynth::new(
         Envelope(0.02, 0.45, 0.0, 0.45),
-        [0.0, 0.05, 0.75, 0.2],
+        WaveMix::new(0.0, 0.05, 0.75, 0.2, 0.0, 0.0),
         vec![(1.0, 0.8), (0.5, 0.1), (2.0, 0.1)],
     );
 
     let synth2 = SimpleSynth::new(
         Envelope(0.02, 2.0, 0.0, 0.0),
-        [0.0, 0.0, 0.5, 0.5],
+        WaveMix::new(0.0, 0.0, 0.5, 0.5, 0.0, 0.0),
         vec![(1.0, 0.9), (0.5, 0.05), (2.0, 0.05)],
     );
 
@@ -337,7 +341,7 @@ pub fn keys_synth(volume: f64) -> impl Synth {
 pub fn strings_synth(volume: f64) -> impl Synth {
     let synth = SimpleSynth::new(
         Envelope(0.3, 1.0, 0.8, 0.1),
-        [0.7, 0.2, 0.05, 0.05],
+        WaveMix::new(0.7, 0.2, 0.05, 0.05, 0.0, 0.0),
         vec![(1.0, 0.75), (0.5, 0.1), (2.0, 0.15)],
     );
 
@@ -357,21 +361,35 @@ pub fn strings_synth(volume: f64) -> impl Synth {
     SynthMaster::new(Box::new(vibrato_synth), 10.0, 2.5, 1.0, 0.0, volume)
 }
 
-pub fn soft_follow(volume: f64) -> impl Synth {
+pub fn guitar_synth(volume: f64) -> impl Synth {
     let synth = SimpleSynth::new(
-        Envelope(0.001, 0.0, 1.0, 0.001),
-        [0.2, 0.2, 0.55, 0.05],
+        Envelope(0.02, 2.0, 0.0, 2.0),
+        WaveMix::new(0.31, 0.31, 0.0, 0.0, 0.31, 0.06),
         vec![(1.0, 1.0)],
     );
 
     let low_filter = Some(Filter(
         Parameter::KeyTracked((60.0, 72.0), (6000.0, 10000.0), true),
-        0.1,
+        0.3,
     ));
     let high_filter = Some(Filter(Parameter::Const(200.0), 0.5));
 
     let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
-    let follow_synth = SynthFollowFreq::new(Box::new(filtered_synth), Parameter::Const(2.0));
+    let vibrato_synth = SynthVibrato::new(
+        Box::new(filtered_synth),
+        Parameter::Const(2.0),
+        Parameter::Enveloped(Envelope(2.0, 0.0, 1.0, 0.0), 0.0, 0.004),
+    );
 
-    SynthMaster::new(Box::new(follow_synth), 10.0, 2.5, 1.0, 0.0, volume)
+    let effect = SynthEffect::new(Box::new(vibrato_synth), || {
+        moog_hz(600.0, 0.3)
+            >> map(|x: &Frame<f64, U1>| {
+                let y = compress(x[0], 0.05, 0.0) * 20.0;
+                let y = distort(y, 20.0, 20.0);
+                y
+            })
+            >> clip()
+    });
+
+    SynthMaster::new(Box::new(effect), 40.0, 4.5, 0.7, 0.0, volume)
 }

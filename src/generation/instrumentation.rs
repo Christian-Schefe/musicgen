@@ -1,6 +1,6 @@
 use rand::{rngs::ThreadRng, Rng};
 
-use crate::playback::tone::Tone;
+use crate::playback::instrument::Tone;
 
 use super::music::{Chord, Phrase, Piece};
 

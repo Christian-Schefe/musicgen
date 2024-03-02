@@ -2,16 +2,15 @@ mod generation;
 mod playback;
 mod score;
 
-use fundsp::hacker::*;
-use generation::structure::generate_structure;
+use std::rc::Rc;
 
-use crate::{
-    generation::{instrumentation::{generate_line, Voicing}, melody::gen_melody},
-    playback::{
-        instrument::{Instrument, mix_instruments},
-        playback,
-        synth::{keys_synth, strings_synth},
-    },
+use fundsp::hacker::*;
+use score::{Bar, Dynamic, Key, Note, Score};
+
+use crate::playback::{
+    instrument::{mix_instruments, Instrument},
+    playback,
+    synth::{guitar_synth, keys_synth, strings_synth},
 };
 
 fn main() {
@@ -22,23 +21,38 @@ fn main() {
 }
 
 fn run() -> Result<(), anyhow::Error> {
-    let mut rng = rand::thread_rng();
-
-    let melody_instrument = Instrument::new(Box::new(strings_synth(0.5)));
-    let chord_instrument = Instrument::new(Box::new(keys_synth(1.0)));
-
-    let piece = generate_structure(&mut rng, 32, (60, 80));
-
-    let melody = gen_melody(&mut rng, &piece, (60, 72));
-    let chords = generate_line(&mut rng, &piece, Voicing::Chords((48, 59)));
-
-    let sound = mix_instruments(vec![(melody_instrument, melody), (chord_instrument, chords)]);
-
     // let wave = Wave64::render(44100.0, duration.as_secs_f64(), &mut net);
     // let wave = wave.filter_latency(wave.duration(), &mut (limiter_stereo((5.0, 5.0))));
     // wave.save_wav32("./output/generated.wav")?;
 
     // net.reset();
+
+    let mut score = Score::new(2);
+    let key = Rc::new(Key::new(0, true));
+    let bpm = 100.0;
+
+    score.add_bar(Bar::new(4, bpm, key.clone(), Dynamic::MezzoForte));
+    score.add_bar(Bar::new(4, bpm, key.clone(), Dynamic::MezzoForte));
+    score.add_note(0, 0, 0.0, Note::new(0.9, 0, 5));
+    score.add_note(0, 0, 1.0, Note::new(0.9, 1, 5));
+    score.add_note(0, 0, 2.0, Note::new(0.9, 2, 5));
+    score.add_note(0, 0, 3.0, Note::new(0.9, 3, 5));
+    score.add_note(0, 1, 0.0, Note::new(4.0, 4, 5));
+
+    // score.add_note(1, 0, 0.0, Note::new(4.0, 0, 5));
+    // score.add_note(1, 0, 0.0, Note::new(4.0, 2, 5));
+    // score.add_note(1, 0, 0.0, Note::new(4.0, 4, 5));
+
+    let keys_voice = score.convert_to_playable(0);
+    let strings_voice = score.convert_to_playable(1);
+
+    println!("{:?}", strings_voice);
+
+    let keys = Instrument::new(Box::new(guitar_synth(0.5)));
+    let strings = Instrument::new(Box::new(strings_synth(0.5)));
+    let instruments = vec![(keys, keys_voice), (strings, strings_voice)];
+    let sound = mix_instruments(instruments);
+
     playback(sound)?;
     Ok(())
 }
