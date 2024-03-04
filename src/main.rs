@@ -39,9 +39,9 @@ fn run() -> Result<(), anyhow::Error> {
     let keys_voice = score.convert_to_playable(0);
     let strings_voice = score.convert_to_playable(1);
 
-    println!("{:?}", strings_voice);
+    println!("{:?}", keys_voice);
 
-    let keys = Instrument::new(Box::new(guitar_synth(0.5)), keys_voice);
+    let keys = Instrument::new(Box::new(keys_synth(0.5)), keys_voice);
     let strings = Instrument::new(Box::new(strings_synth(0.5)), strings_voice);
     let sound = SoundMix::mix(vec![Box::new(keys), Box::new(strings)]);
 
