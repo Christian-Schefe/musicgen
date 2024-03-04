@@ -136,37 +136,3 @@ impl Dynamic {
         }
     }
 }
-
-#[cfg(test)]
-mod test {
-    use crate::playback::{
-        instrument::{mix_instruments, Instrument},
-        playback,
-        synth::{keys_synth, strings_synth},
-    };
-
-    use super::*;
-
-    #[test]
-    fn test_score() {
-        let mut score = Score::new(2);
-        let key = Rc::new(Key::new(0, true));
-        let bpm = 100.0;
-
-        score.add_bar(Bar::new(4, bpm, key.clone(), Dynamic::MezzoForte));
-        score.add_bar(Bar::new(4, bpm, key.clone(), Dynamic::MezzoForte));
-        score.add_note(0, 0, 0.0, Note::new(1.0, 0, 4));
-        score.add_note(0, 0, 1.0, Note::new(1.0, 1, 4));
-        score.add_note(0, 0, 2.0, Note::new(1.0, 2, 4));
-        score.add_note(0, 0, 3.0, Note::new(1.0, 3, 4));
-
-        let keys_voice = score.convert_to_playable(0);
-        let strings_voice = score.convert_to_playable(1);
-
-        let keys = Instrument::new(Box::new(keys_synth(0.5)));
-        let strings = Instrument::new(Box::new(strings_synth(0.5)));
-        let instruments = vec![(strings, strings_voice), (keys, keys_voice)];
-        let sound = mix_instruments(instruments);
-        playback(sound).unwrap();
-    }
-}

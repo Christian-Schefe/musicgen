@@ -1,6 +1,6 @@
 use crate::hacker::*;
 
-use super::math::{compress, compress_up, distort, hz_midi, remap};
+use super::math::*;
 
 #[derive(Debug, Clone)]
 pub struct Envelope(pub f64, pub f64, pub f64, pub f64);
@@ -383,11 +383,7 @@ pub fn guitar_synth(volume: f64) -> impl Synth {
 
     let effect = SynthEffect::new(Box::new(vibrato_synth), || {
         moog_hz(600.0, 0.3)
-            >> map(|x: &Frame<f64, U1>| {
-                let y = compress(x[0], 0.05, 0.0) * 20.0;
-                let y = distort(y, 20.0, 20.0);
-                y
-            })
+            >> shape(Shape::Crush(5.0))
             >> clip()
     });
 

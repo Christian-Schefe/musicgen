@@ -1,4 +1,3 @@
-mod generation;
 mod playback;
 mod score;
 
@@ -8,9 +7,9 @@ use fundsp::hacker::*;
 use score::{Bar, Dynamic, Key, Note, Score};
 
 use crate::playback::{
-    instrument::{mix_instruments, Instrument},
-    playback,
-    synth::{guitar_synth, keys_synth, strings_synth},
+    instrument::{Instrument, Sound, SoundMaker, SoundMix},
+    playback, save,
+    synth::*,
 };
 
 fn main() {
@@ -21,12 +20,6 @@ fn main() {
 }
 
 fn run() -> Result<(), anyhow::Error> {
-    // let wave = Wave64::render(44100.0, duration.as_secs_f64(), &mut net);
-    // let wave = wave.filter_latency(wave.duration(), &mut (limiter_stereo((5.0, 5.0))));
-    // wave.save_wav32("./output/generated.wav")?;
-
-    // net.reset();
-
     let mut score = Score::new(2);
     let key = Rc::new(Key::new(0, true));
     let bpm = 100.0;
@@ -48,11 +41,11 @@ fn run() -> Result<(), anyhow::Error> {
 
     println!("{:?}", strings_voice);
 
-    let keys = Instrument::new(Box::new(guitar_synth(0.5)));
-    let strings = Instrument::new(Box::new(strings_synth(0.5)));
-    let instruments = vec![(keys, keys_voice), (strings, strings_voice)];
-    let sound = mix_instruments(instruments);
+    let keys = Instrument::new(Box::new(guitar_synth(0.5)), keys_voice);
+    let strings = Instrument::new(Box::new(strings_synth(0.5)), strings_voice);
+    let sound = SoundMix::mix(vec![Box::new(keys), Box::new(strings)]);
 
-    playback(sound)?;
+    playback(&sound)?;
+    save(&sound)?;
     Ok(())
 }
