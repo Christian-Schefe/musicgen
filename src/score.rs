@@ -3,58 +3,65 @@ use std::rc::Rc;
 use crate::playback::instrument::Tone;
 
 #[derive(Debug, Clone)]
-pub struct Score {
-    voices: usize,
-    bars: Vec<Bar>,
+pub struct Score<const N: usize> {
+    sections: Vec<Section<N>>,
 }
 
-impl Score {
-    pub fn new(voices: usize) -> Self {
-        Self {
-            voices,
-            bars: Vec::new(),
-        }
+impl<const N: usize> Score<N> {
+    pub fn from_sections(sections: Vec<Section<N>>) -> Self {
+        Self { sections }
     }
-    pub fn add_bar(&mut self, mut bar: Bar) {
-        bar.set_voice_count(self.voices);
-        self.bars.push(bar)
-    }
-    pub fn add_bars(&mut self, mut bar: Bar, count: usize) {
-        bar.set_voice_count(self.voices);
-        self.bars.extend(vec![bar; count])
-    }
-    pub fn add_note(&mut self, voice: usize, bar: usize, beat: f64, note: Note) {
-        self.bars[bar].add_note(voice, beat, note);
-    }
-    pub fn convert_to_playable(&self, voice: usize) -> Vec<Tone> {
-        let mut time = 0.0;
-        self.bars.iter().flat_map(|x| x.convert_to_playable(voice, &mut time)).collect()
+    pub fn convert_to_playable(&self) -> [Vec<Tone>; N] {
+        std::array::from_fn(|i| {
+            let mut time = 0.0;
+            self.sections
+                .iter()
+                .flat_map(|x| x.convert_to_playable(i, &mut time))
+                .collect()
+        })
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Bar {
-    beats: u8,
-    notes: Vec<Vec<(f64, Note)>>,
-    bpm: f64,
-    key: Rc<Key>,
-    dynamic: Dynamic,
+pub struct Section<const N: usize> {
+    bars: Vec<Bar<N>>,
 }
 
-impl Bar {
+impl<const N: usize> Section<N> {
+    pub fn from_bars(bars: Vec<Bar<N>>) -> Self {
+        Self { bars }
+    }
+    pub fn add_note(&mut self, voice: usize, bar: usize, beat: f64, note: Note) {
+        self.bars[bar].add_note(voice, beat, note);
+    }
+    pub fn convert_to_playable(&self, voice: usize, time: &mut f64) -> Vec<Tone> {
+        self.bars
+            .iter()
+            .flat_map(|x| x.convert_to_playable(voice, time))
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Bar<const N: usize> {
+    pub beats: u8,
+    notes: [Vec<(f64, Note)>; N],
+    pub bpm: f64,
+    pub key: Rc<Key>,
+    pub dynamic: Dynamic,
+}
+
+impl<const N: usize> Bar<N> {
     pub fn new(beats: u8, bpm: f64, key: Rc<Key>, dynamic: Dynamic) -> Self {
         Self {
             beats,
-            notes: Vec::new(),
+            notes: vec![Vec::new(); N].try_into().unwrap(),
             bpm,
             key,
             dynamic,
         }
     }
-    fn set_voice_count(&mut self, voices: usize) {
-        self.notes.resize_with(voices, Vec::new)
-    }
-    fn add_note(&mut self, voice: usize, beat: f64, note: Note) {
+    pub fn add_note(&mut self, voice: usize, beat: f64, note: Note) {
         self.notes[voice].push((beat, note))
     }
     fn convert_to_playable(&self, voice: usize, time: &mut f64) -> Vec<Tone> {
@@ -72,17 +79,19 @@ pub struct Note {
     length: f64,
     pitch: u8,
     octave: u8,
+    accidental: Option<bool>,
 }
 
 impl Note {
-    pub fn new(length: f64, pitch: u8, octave: u8) -> Self {
+    pub fn new(length: f64, pitch: u8, octave: u8, accidental: Option<bool>) -> Self {
         Self {
             length,
             pitch,
             octave,
+            accidental,
         }
     }
-    fn convert_to_playable(&self, time: f64, bar: &Bar, offset: f64) -> Tone {
+    fn convert_to_playable<const N: usize>(&self, time: f64, bar: &Bar<N>, offset: f64) -> Tone {
         let time_offset = offset * 60.0 / bar.bpm;
         Tone::midi(
             time + time_offset,
@@ -114,7 +123,11 @@ impl Key {
         }
     }
     fn midi(&self, note: &Note) -> f64 {
-        (self.tonic + self.scale[note.pitch as usize] + note.octave * 12) as f64
+        let octave = note.octave * 12;
+        let offset = note
+            .accidental
+            .map_or(octave, |b| if b { octave + 1 } else { octave - 1 });
+        (self.tonic + self.scale[note.pitch as usize] + offset) as f64
     }
 }
 
