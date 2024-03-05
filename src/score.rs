@@ -45,7 +45,7 @@ impl<const N: usize> Section<N> {
 #[derive(Debug, Clone)]
 pub struct Bar<const N: usize> {
     pub beats: u8,
-    notes: [Vec<(f64, Note)>; N],
+    pub notes: [Vec<(f64, Note)>; N],
     pub bpm: f64,
     pub key: Rc<Key>,
     pub dynamic: Dynamic,
@@ -76,17 +76,17 @@ impl<const N: usize> Bar<N> {
 
 #[derive(Debug, Clone)]
 pub struct Note {
-    length: f64,
-    pitch: u8,
-    octave: u8,
-    accidental: Option<bool>,
+    pub length: f64,
+    pub pitch: u8,
+    pub octave: u8,
+    pub accidental: Option<bool>,
 }
 
 impl Note {
     pub fn new(length: f64, pitch: u8, octave: u8, accidental: Option<bool>) -> Self {
         Self {
             length,
-            pitch,
+            pitch: pitch % 7,
             octave,
             accidental,
         }

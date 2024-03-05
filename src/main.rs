@@ -61,6 +61,6 @@ fn run() -> Result<(), anyhow::Error> {
     let sound = SoundMix::mix(vec![Box::new(keys), Box::new(strings)]);
 
     save(&sound)?;
-    playback(&sound)?;
+    // playback(&sound)?;
     Ok(())
 }

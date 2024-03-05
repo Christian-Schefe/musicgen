@@ -40,27 +40,63 @@ pub fn generate_section<const N: usize>(
     ];
 
     generate_melody(rng, 0, &mut bars);
+    generate_chords(rng, 0, 1, &mut bars);
 
     Section::from_bars(bars)
 }
 
 pub fn generate_melody<const N: usize>(rng: &mut ThreadRng, voice: usize, bars: &mut Vec<Bar<N>>) {
-    let mut shape = vec![0; N];
-    for i in 1..N {
+    let mut shape: Vec<u8> = vec![0; N];
+    for i in 1..bars.len() {
         if (i % 2) == 0 {
             shape.push(rng.gen_range(0..7))
         }
     }
-    for i in 0..N - 1 {
+    for i in 0..bars.len() - 1 {
         if (i % 2) != 0 {
             let prev = shape[i - 1];
             let next = shape[i + 1];
-            shape.push(rng.gen_range(prev..=next))
+            if prev == next {
+                shape.push((rng.gen_range(prev - 2..=prev + 2) + 7) % 7)
+            } else if prev < next {
+                shape.push(rng.gen_range(prev..=next))
+            } else if prev > next {
+                shape.push(rng.gen_range(next..=prev))
+            }
         }
     }
 
-    for i in 0..N {
+    for i in 0..bars.len() {
         let bar = bars.get_mut(i).unwrap();
         bar.add_note(voice, 0.0, Note::new(bar.beats as f64, shape[i], 5, None));
+    }
+}
+
+pub fn generate_chords<const N: usize>(
+    rng: &mut ThreadRng,
+    melody: usize,
+    voice: usize,
+    bars: &mut Vec<Bar<N>>,
+) {
+    for i in 0..bars.len() {
+        let bar = bars.get_mut(i).unwrap();
+        let melody_notes: Vec<Note> = bar.notes[melody].iter().map(|x| x.1.clone()).collect();
+        let p1 = &melody_notes[0];
+
+        bar.add_note(
+            voice,
+            0.0,
+            Note::new(bar.beats as f64, p1.pitch, 4, p1.accidental),
+        );
+        bar.add_note(
+            voice,
+            0.0,
+            Note::new(bar.beats as f64, p1.pitch + 2, 4, p1.accidental),
+        );
+        bar.add_note(
+            voice,
+            0.0,
+            Note::new(bar.beats as f64, p1.pitch + 4, 4, p1.accidental),
+        );
     }
 }
