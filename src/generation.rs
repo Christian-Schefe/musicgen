@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rand::{rngs::ThreadRng, Rng};
+use rand::{rngs::ThreadRng, seq::IteratorRandom, Rng};
 
 use crate::score::*;
 
@@ -46,25 +46,29 @@ pub fn generate_section<const N: usize>(
 }
 
 pub fn generate_melody<const N: usize>(rng: &mut ThreadRng, voice: usize, bars: &mut Vec<Bar<N>>) {
-    let mut shape: Vec<u8> = vec![0; N];
-    for i in 1..bars.len() {
+    let mut shape: Vec<u8> = vec![0; bars.len()];
+    shape[bars.len() - 1] = [0, 3, 4].into_iter().choose(rng).unwrap();
+    for i in 1..bars.len() - 1 {
         if (i % 2) == 0 {
-            shape.push(rng.gen_range(0..7))
+            shape[i] = rng.gen_range(0..7)
         }
     }
-    for i in 0..bars.len() - 1 {
+    for i in 1..bars.len() - 1 {
         if (i % 2) != 0 {
             let prev = shape[i - 1];
             let next = shape[i + 1];
             if prev == next {
-                shape.push((rng.gen_range(prev - 2..=prev + 2) + 7) % 7)
+                let lower = if prev < 2 { 0 } else { prev - 2 };
+                let higher = if prev > 4 { 6 } else { prev + 2 };
+                shape[i] = rng.gen_range(lower..=higher)
             } else if prev < next {
-                shape.push(rng.gen_range(prev..=next))
+                shape[i] = rng.gen_range(prev..=next)
             } else if prev > next {
-                shape.push(rng.gen_range(next..=prev))
+                shape[i] = rng.gen_range(next..=prev)
             }
         }
     }
+    println!("{:?}", shape);
 
     for i in 0..bars.len() {
         let bar = bars.get_mut(i).unwrap();

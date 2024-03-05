@@ -54,6 +54,7 @@ fn run() -> Result<(), anyhow::Error> {
     let voices = score.convert_to_playable();
 
     println!("{:?}", voices);
+    println!("{:?}", voices.len());
     let [keys_voice, strings_voice] = voices;
 
     let keys = Instrument::new(Box::new(keys_synth(1.0)), keys_voice);
