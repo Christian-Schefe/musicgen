@@ -331,11 +331,39 @@ pub fn keys_synth(volume: f64) -> impl Synth {
 
     let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
     let layerd_synth = SynthLayer::new(vec![
-        (Box::new(filtered_synth), 1.0),
-        (Box::new(synth2), 0.1),
+        (Box::new(filtered_synth), 0.95),
+        (Box::new(synth2), 0.05),
     ]);
 
-    SynthMaster::new(Box::new(layerd_synth), 10.0, 2.5, 0.0, 0.0, volume)
+    SynthMaster::new(Box::new(layerd_synth), 10.0, 5.5, 0.0, 0.0, volume)
+}
+
+pub fn sustain_keys_synth(volume: f64) -> impl Synth {
+    let synth = SimpleSynth::new(
+        Envelope(0.02, 2.45, 0.0, 0.45),
+        WaveMix::new(0.0, 0.05, 0.75, 0.2, 0.0, 0.0),
+        vec![(1.0, 0.8), (0.5, 0.1), (2.0, 0.1)],
+    );
+
+    let synth2 = SimpleSynth::new(
+        Envelope(0.02, 2.0, 0.0, 0.0),
+        WaveMix::new(0.0, 0.0, 0.5, 0.5, 0.0, 0.0),
+        vec![(1.0, 0.9), (0.5, 0.05), (2.0, 0.05)],
+    );
+
+    let low_filter = Some(Filter(
+        Parameter::KeyTracked((60.0, 72.0), (4000.0, 6000.0), true),
+        0.1,
+    ));
+    let high_filter = Some(Filter(Parameter::Const(200.0), 0.5));
+
+    let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
+    let layerd_synth = SynthLayer::new(vec![
+        (Box::new(filtered_synth), 0.95),
+        (Box::new(synth2), 0.05),
+    ]);
+
+    SynthMaster::new(Box::new(layerd_synth), 10.0, 5.5, 0.0, 0.0, volume)
 }
 
 pub fn strings_synth(volume: f64) -> impl Synth {

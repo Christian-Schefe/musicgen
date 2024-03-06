@@ -92,10 +92,11 @@ impl Note {
         }
     }
     fn convert_to_playable<const N: usize>(&self, time: f64, bar: &Bar<N>, offset: f64) -> Tone {
-        let time_offset = offset * 60.0 / bar.bpm;
+        let secs_per_beat = 60.0 / bar.bpm;
+        let time_offset = offset * secs_per_beat;
         Tone::midi(
             time + time_offset,
-            self.length,
+            self.length * secs_per_beat,
             bar.key.midi(self),
             bar.dynamic.velocity(),
         )
@@ -104,29 +105,27 @@ impl Note {
 
 #[derive(Debug, Clone)]
 pub struct Key {
-    tonic: u8,
-    scale: [u8; 7],
+    tonic: i8,
+    scale: [i8; 7],
 }
 
 impl Key {
-    pub fn new(tonic: u8, mode: bool) -> Self {
+    pub fn new(tonic: i8, mode: bool) -> Self {
         Self {
             tonic,
             scale: Self::gen_scale(mode),
         }
     }
-    fn gen_scale(mode: bool) -> [u8; 7] {
+    fn gen_scale(mode: bool) -> [i8; 7] {
         if mode {
             [0, 2, 4, 5, 7, 9, 11]
         } else {
-            [0, 2, 3, 5, 7, 8, 10]
+            [0, 2, 3, 5, 7, 8, 11]
         }
     }
     fn midi(&self, note: &Note) -> f64 {
-        let octave = note.octave * 12;
-        let offset = note
-            .accidental
-            .map_or(octave, |b| if b { octave + 1 } else { octave - 1 });
+        let octave = (note.octave * 12) as i8;
+        let offset = octave + note.accidental.map_or(0, |b| if b { 1 } else { -1 });
         (self.tonic + self.scale[note.pitch as usize] + offset) as f64
     }
 }
