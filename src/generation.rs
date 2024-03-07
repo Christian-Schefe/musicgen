@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rand::{rngs::ThreadRng, seq::IteratorRandom, Rng};
+use rand::{rngs::StdRng, Rng};
 
 use crate::score::*;
 
@@ -25,10 +25,7 @@ impl SectionSettings {
     }
 }
 
-pub fn generate_section<const N: usize>(
-    rng: &mut ThreadRng,
-    settings: SectionSettings,
-) -> Section<N> {
+pub fn generate_section<const N: usize>(rng: &mut StdRng, settings: SectionSettings) -> Section<N> {
     let mut bars = vec![
         Bar::new(
             settings.beats,
@@ -47,12 +44,12 @@ pub fn generate_section<const N: usize>(
 }
 
 pub fn generate_beat<const N: usize>(
-    rng: &mut ThreadRng,
+    rng: &mut StdRng,
     bassdrum_voice: usize,
     snare_voice: usize,
     bars: &mut Vec<Bar<N>>,
 ) {
-    let pattern = rng.gen_range(0..4);
+    let pattern = rng.gen_range(0..=0);
 
     for i in 0..bars.len() {
         let bar = bars.get_mut(i).unwrap();
@@ -90,7 +87,7 @@ pub fn generate_beat<const N: usize>(
     }
 }
 
-pub fn generate_melody<const N: usize>(rng: &mut ThreadRng, voice: usize, bars: &mut Vec<Bar<N>>) {
+pub fn generate_melody<const N: usize>(rng: &mut StdRng, voice: usize, bars: &mut Vec<Bar<N>>) {
     let shapes: Vec<Vec<u8>> = vec![
         vec![6, 0, 0, 0, 0, 0, 2, 0],
         vec![2, 0, 6, 0, 0, 0, 0, 0],
@@ -98,6 +95,8 @@ pub fn generate_melody<const N: usize>(rng: &mut ThreadRng, voice: usize, bars: 
         vec![8, 0, 0, 0, 0, 0, 0, 0],
         vec![4, 0, 0, 0, 4, 0, 0, 0],
         vec![2, 0, 2, 0, 4, 0, 0, 0],
+        vec![4, 0, 0, 0, 2, 0, 0, 0],
+        vec![2, 0, 2, 0, 2, 0, 0, 0],
         vec![4, 0, 0, 0, 2, 0, 2, 0],
         vec![2, 0, 2, 0, 2, 0, 2, 0],
     ];
@@ -122,7 +121,7 @@ pub fn generate_melody<const N: usize>(rng: &mut ThreadRng, voice: usize, bars: 
 }
 
 pub fn generate_chords<const N: usize>(
-    rng: &mut ThreadRng,
+    rng: &mut StdRng,
     melody: usize,
     voice: usize,
     bars: &mut Vec<Bar<N>>,

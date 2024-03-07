@@ -5,7 +5,7 @@ mod score;
 use std::rc::Rc;
 
 use fundsp::hacker::*;
-use rand::{thread_rng, Rng};
+use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
 use score::{Dynamic, Key, Score};
 
 use crate::{
@@ -25,7 +25,10 @@ fn main() {
 }
 
 fn run() -> Result<(), anyhow::Error> {
-    let mut rng = thread_rng();
+    let mut seed_rng = thread_rng();
+    let seed: u32 = seed_rng.gen();
+    println!("Seed: {}", seed);
+    let mut rng = StdRng::seed_from_u64(seed as u64);
     let key = Rc::new(Key::new(rng.gen_range(-0..=4), rng.gen_bool(0.5)));
     let bpm = rng.gen_range(90..=130) as f64;
 
@@ -62,14 +65,21 @@ fn run() -> Result<(), anyhow::Error> {
 
     let [keys_voice, strings_voice, drums_voice, snare_voice] = voices;
 
-    let keys = Instrument::new(Box::new(strings_synth(0.65)), keys_voice);
-    let strings = Instrument::new(Box::new(sustain_keys_synth(0.95)), strings_voice);
+    let lead = Instrument::new(Box::new(random_lead(&mut rng, 0.65)), keys_voice);
+    let chords = Instrument::new(Box::new(strings_synth(0.95)), strings_voice);
     let bassdrum = Instrument::new(Box::new(bassdrum_synth(1.0)), drums_voice);
-    let snare = Instrument::new(Box::new(snare_synth(0.5)), snare_voice);
+    let snare = Instrument::new(Box::new(snare_synth(1.0)), snare_voice);
 
-    let sound = SoundMix::mix(vec![Box::new(keys), Box::new(strings), Box::new(bassdrum), Box::new(snare)]);
+    let sound = SoundMix::mix(vec![
+        Box::new(lead),
+        Box::new(chords),
+        Box::new(bassdrum),
+        Box::new(snare),
+    ]);
 
-    // save(&sound)?;
+    println!("Saving...");
+    save(&sound, format!("./output/gen_{}.wav", seed))?;
+    println!("Playing...");
     playback(&sound)?;
     Ok(())
 }

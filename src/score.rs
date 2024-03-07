@@ -31,9 +31,6 @@ impl<const N: usize> Section<N> {
     pub fn from_bars(bars: Vec<Bar<N>>) -> Self {
         Self { bars }
     }
-    pub fn add_note(&mut self, voice: usize, bar: usize, beat: f64, note: Note) {
-        self.bars[bar].add_note(voice, beat, note);
-    }
     pub fn convert_to_playable(&self, voice: usize, time: &mut f64) -> Vec<Tone> {
         self.bars
             .iter()

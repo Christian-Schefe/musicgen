@@ -1,4 +1,5 @@
 use fundsp::sound::{bassdrum, snaredrum};
+use rand::{rngs::StdRng, Rng};
 
 use crate::hacker::*;
 
@@ -83,6 +84,25 @@ impl WaveMix {
             noise,
         }
     }
+    fn normalized(&self) -> Self {
+        // let sum = self.square + self.saw + self.sine + self.triangle + self.pulse + self.noise;
+        let sum = sqrt(
+            self.square * self.square
+                + self.saw * self.saw
+                + self.sine * self.sine
+                + self.triangle * self.triangle
+                + self.pulse * self.pulse
+                + self.noise * self.noise,
+        );
+        Self::new(
+            self.square / sum,
+            self.saw / sum,
+            self.sine / sum,
+            self.triangle / sum,
+            self.pulse / sum,
+            self.noise / sum,
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -125,7 +145,7 @@ impl SimpleSynth {
             & (square() * self.mix.square)
             & (triangle() * self.mix.triangle)
             & (sine() * self.mix.sine)
-            & (((pass() | constant(0.0)) >> pulse()) * self.mix.pulse)
+            & (((pass() | constant(0.5)) >> pulse()) * self.mix.pulse)
             & (sink() | noise() * self.mix.noise)
     }
 }
@@ -431,6 +451,37 @@ pub fn strings_synth(volume: f64) -> impl Synth {
     SynthMaster::new(Box::new(vibrato_synth), 10.0, 2.5, 1.0, 0.0, volume)
 }
 
+pub fn random_lead(rng: &mut StdRng, volume: f64) -> impl Synth {
+    let mut enablers: [bool; 6] = rng.gen();
+    if !enablers.iter().any(|x| *x) {
+        enablers[0] = true;
+    }
+    let vals: [f64; 6] = rng.gen();
+    let f: Vec<f64> = enablers
+        .into_iter()
+        .zip(vals)
+        .map(|(x, y)| if x { y } else { 0.0 })
+        .collect();
+
+    let mix = WaveMix::new(f[0], f[1], f[2], f[3], f[4], f[5] * 0.01).normalized();
+    // let mix = WaveMix::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0).normalized();
+    println!("{:?}", mix);
+    let synth = SimpleSynth::new(Envelope(0.3, 1.0, 0.8, 0.1), mix, vec![(1.0, 1.0)]);
+
+    let low_filter = Some(Filter(Parameter::Const(6000.0), 0.3));
+    let high_filter = Some(Filter(Parameter::Const(200.0), 0.3));
+
+    let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
+
+    let vibrato_synth = SynthVibrato::new(
+        Box::new(filtered_synth),
+        Parameter::Const(5.0),
+        Parameter::Enveloped(Envelope(2.0, 0.0, 1.0, 0.0), 0.0, 0.006),
+    );
+
+    SynthMaster::new(Box::new(vibrato_synth), 10.0, 2.5, 0.2, 0.0, volume)
+}
+
 pub fn bassdrum_synth(volume: f64) -> impl Synth {
     let synth = CustomSynth::new(Envelope(0.0, 0.0, 1.0, 0.0), || {
         sink() | bassdrum(0.2, 220.0, 60.0)
@@ -445,9 +496,7 @@ pub fn bassdrum_synth(volume: f64) -> impl Synth {
 }
 
 pub fn snare_synth(volume: f64) -> impl Synth {
-    let synth = CustomSynth::new(Envelope(0.0, 0.0, 1.0, 0.0), || {
-        sink() | snaredrum(0, 0.3)
-    });
+    let synth = CustomSynth::new(Envelope(0.0, 0.0, 1.0, 0.0), || sink() | snaredrum(0, 0.3));
 
     let low_filter = Some(Filter(Parameter::Const(6000.0), 0.3));
     let high_filter = None;

@@ -2,6 +2,8 @@ pub mod instrument;
 pub mod math;
 pub mod synth;
 
+use std::path::Path;
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SizedSample, Stream};
 use fundsp::hacker::*;
@@ -30,13 +32,16 @@ pub fn playback(sound: &dyn SoundMaker) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub fn save(sound: &dyn SoundMaker) -> Result<(), anyhow::Error> {
+pub fn save<P>(sound: &dyn SoundMaker, path: P) -> Result<(), anyhow::Error>
+where
+    P: AsRef<Path>,
+{
     let mut sound = sound.build();
     sound.0.reset();
 
     let wave = Wave64::render(44100.0, sound.1.as_secs_f64(), &mut sound.0);
     let wave = wave.filter_latency(wave.duration(), &mut (limiter_stereo((5.0, 5.0))));
-    wave.save_wav32("./output/generated.wav")?;
+    wave.save_wav32(path)?;
 
     Ok(())
 }
