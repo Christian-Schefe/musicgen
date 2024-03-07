@@ -1,3 +1,5 @@
+use fundsp::sound::{bassdrum, snaredrum};
+
 use crate::hacker::*;
 
 use super::math::*;
@@ -125,6 +127,46 @@ impl SimpleSynth {
             & (sine() * self.mix.sine)
             & (((pass() | constant(0.0)) >> pulse()) * self.mix.pulse)
             & (sink() | noise() * self.mix.noise)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CustomSynth<F, T>
+where
+    F: Fn() -> T,
+    T: AudioUnit64,
+{
+    pub envelope: Envelope,
+    pub func: F,
+}
+
+impl<F, T> Synth for CustomSynth<F, T>
+where
+    F: Fn() -> T,
+    T: AudioUnit64 + 'static,
+{
+    fn instantiate(&self) -> Net64 {
+        self.volume_adjusted(self.get_net64())
+    }
+    fn release_time(&self) -> f64 {
+        self.envelope.3
+    }
+}
+
+impl<F, T> CustomSynth<F, T>
+where
+    F: Fn() -> T,
+    T: AudioUnit64 + 'static,
+{
+    fn new(envelope: Envelope, func: F) -> Self {
+        Self { envelope, func }
+    }
+    fn volume_adjusted(&self, net: Net64) -> Net64 {
+        net * self.envelope.as_asdr() * pass()
+    }
+    fn get_net64(&self) -> Net64 {
+        let node = (self.func)();
+        Net64::wrap(Box::new(node))
     }
 }
 
@@ -389,31 +431,28 @@ pub fn strings_synth(volume: f64) -> impl Synth {
     SynthMaster::new(Box::new(vibrato_synth), 10.0, 2.5, 1.0, 0.0, volume)
 }
 
-pub fn guitar_synth(volume: f64) -> impl Synth {
-    let synth = SimpleSynth::new(
-        Envelope(0.02, 2.0, 0.0, 2.0),
-        WaveMix::new(0.31, 0.31, 0.0, 0.0, 0.31, 0.06),
-        vec![(1.0, 1.0)],
-    );
-
-    let low_filter = Some(Filter(
-        Parameter::KeyTracked((60.0, 72.0), (6000.0, 10000.0), true),
-        0.3,
-    ));
-    let high_filter = Some(Filter(Parameter::Const(200.0), 0.5));
-
-    let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
-    let vibrato_synth = SynthVibrato::new(
-        Box::new(filtered_synth),
-        Parameter::Const(2.0),
-        Parameter::Enveloped(Envelope(2.0, 0.0, 1.0, 0.0), 0.0, 0.004),
-    );
-
-    let effect = SynthEffect::new(Box::new(vibrato_synth), || {
-        moog_hz(600.0, 0.3)
-            >> shape(Shape::Crush(5.0))
-            >> clip()
+pub fn bassdrum_synth(volume: f64) -> impl Synth {
+    let synth = CustomSynth::new(Envelope(0.0, 0.0, 1.0, 0.0), || {
+        sink() | bassdrum(0.2, 220.0, 60.0)
     });
 
-    SynthMaster::new(Box::new(effect), 40.0, 4.5, 0.7, 0.0, volume)
+    let low_filter = Some(Filter(Parameter::Const(6000.0), 0.3));
+    let high_filter = None;
+
+    let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
+
+    SynthMaster::new(Box::new(filtered_synth), 40.0, 4.5, 0.5, 0.0, volume)
+}
+
+pub fn snare_synth(volume: f64) -> impl Synth {
+    let synth = CustomSynth::new(Envelope(0.0, 0.0, 1.0, 0.0), || {
+        sink() | snaredrum(0, 0.3)
+    });
+
+    let low_filter = Some(Filter(Parameter::Const(6000.0), 0.3));
+    let high_filter = None;
+
+    let filtered_synth = SynthFilter::new(Box::new(synth), low_filter, high_filter);
+
+    SynthMaster::new(Box::new(filtered_synth), 40.0, 4.5, 0.5, 0.0, volume)
 }

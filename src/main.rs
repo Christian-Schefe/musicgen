@@ -26,8 +26,8 @@ fn main() {
 
 fn run() -> Result<(), anyhow::Error> {
     let mut rng = thread_rng();
-    let key = Rc::new(Key::new(rng.gen_range(-2..=2), rng.gen_bool(0.5)));
-    let bpm = 110.0;
+    let key = Rc::new(Key::new(rng.gen_range(-0..=4), rng.gen_bool(0.5)));
+    let bpm = rng.gen_range(90..=130) as f64;
 
     let intro = generate_section(
         &mut rng,
@@ -60,15 +60,16 @@ fn run() -> Result<(), anyhow::Error> {
 
     let voices = score.convert_to_playable();
 
-    println!("{:?}", voices);
-    let [keys_voice, strings_voice] = voices;
+    let [keys_voice, strings_voice, drums_voice, snare_voice] = voices;
 
-    println!("{:?}", strings_voice);
     let keys = Instrument::new(Box::new(strings_synth(0.65)), keys_voice);
-    let strings = Instrument::new(Box::new(sustain_keys_synth(0.5)), strings_voice);
-    let sound = SoundMix::mix(vec![Box::new(keys), Box::new(strings)]);
+    let strings = Instrument::new(Box::new(sustain_keys_synth(0.95)), strings_voice);
+    let bassdrum = Instrument::new(Box::new(bassdrum_synth(1.0)), drums_voice);
+    let snare = Instrument::new(Box::new(snare_synth(0.5)), snare_voice);
 
-    save(&sound)?;
+    let sound = SoundMix::mix(vec![Box::new(keys), Box::new(strings), Box::new(bassdrum), Box::new(snare)]);
+
+    // save(&sound)?;
     playback(&sound)?;
     Ok(())
 }

@@ -41,8 +41,53 @@ pub fn generate_section<const N: usize>(
 
     generate_melody(rng, 0, &mut bars);
     generate_chords(rng, 0, 1, &mut bars);
+    generate_beat(rng, 2, 3, &mut bars);
 
     Section::from_bars(bars)
+}
+
+pub fn generate_beat<const N: usize>(
+    rng: &mut ThreadRng,
+    bassdrum_voice: usize,
+    snare_voice: usize,
+    bars: &mut Vec<Bar<N>>,
+) {
+    let pattern = rng.gen_range(0..4);
+
+    for i in 0..bars.len() {
+        let bar = bars.get_mut(i).unwrap();
+
+        if pattern == 0 {
+            bar.add_note(bassdrum_voice, 0.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 1.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(bassdrum_voice, 1.5, Note::new(1.0, 0, 3, None));
+            bar.add_note(bassdrum_voice, 2.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 3.0, Note::new(1.0, 0, 3, None));
+        } else if pattern == 1 {
+            bar.add_note(bassdrum_voice, 0.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 0.70, Note::new(1.0, 0, 3, None));
+            bar.add_note(bassdrum_voice, 1.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 1.5, Note::new(1.0, 0, 3, None));
+            bar.add_note(bassdrum_voice, 2.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 2.70, Note::new(1.0, 0, 3, None));
+            bar.add_note(bassdrum_voice, 3.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 3.5, Note::new(1.0, 0, 3, None));
+        } else if pattern == 2 {
+            bar.add_note(bassdrum_voice, 0.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 1.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(bassdrum_voice, 2.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 3.0, Note::new(1.0, 0, 3, None));
+        } else {
+            bar.add_note(bassdrum_voice, 0.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 0.5, Note::new(1.0, 0, 3, None));
+            bar.add_note(bassdrum_voice, 1.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 1.5, Note::new(1.0, 0, 3, None));
+            bar.add_note(bassdrum_voice, 2.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 2.5, Note::new(1.0, 0, 3, None));
+            bar.add_note(bassdrum_voice, 3.0, Note::new(1.0, 0, 3, None));
+            bar.add_note(snare_voice, 3.5, Note::new(1.0, 0, 3, None));
+        }
+    }
 }
 
 pub fn generate_melody<const N: usize>(rng: &mut ThreadRng, voice: usize, bars: &mut Vec<Bar<N>>) {
@@ -85,7 +130,10 @@ pub fn generate_chords<const N: usize>(
     for i in 0..bars.len() {
         let bar = bars.get_mut(i).unwrap();
         let melody_notes: Vec<Note> = bar.notes[melody].iter().map(|x| x.1.clone()).collect();
-        let p1 = melody_notes.get(0).cloned().unwrap_or(Note::new(4.0, 0, 5, None));
+        let p1 = melody_notes
+            .get(0)
+            .cloned()
+            .unwrap_or(Note::new(4.0, 0, 5, None));
 
         bar.add_note(
             voice,
@@ -102,21 +150,9 @@ pub fn generate_chords<const N: usize>(
             0.0,
             Note::new(bar.beats as f64, p1.pitch + 4, 4, p1.accidental),
         );
-        bar.add_note(
-            voice,
-            1.0,
-            Note::new(3.0, p1.pitch, 4, p1.accidental),
-        );
-        bar.add_note(
-            voice,
-            2.0,
-            Note::new(2.0, p1.pitch + 2, 4, p1.accidental),
-        );
-        bar.add_note(
-            voice,
-            3.0,
-            Note::new(1.0, p1.pitch + 4, 4, p1.accidental),
-        );
+        bar.add_note(voice, 1.0, Note::new(3.0, p1.pitch, 4, p1.accidental));
+        bar.add_note(voice, 2.0, Note::new(2.0, p1.pitch + 2, 4, p1.accidental));
+        bar.add_note(voice, 3.0, Note::new(1.0, p1.pitch + 4, 4, p1.accidental));
         if rng.gen_bool(0.5) {
             bar.add_note(
                 voice,
